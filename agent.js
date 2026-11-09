@@ -3,6 +3,7 @@
 export const agent = {
   id: "kaku",
   name: "Kaku",
+  icon: "https://raw.githubusercontent.com/shlroland/magpie-agent-kaku/main/assets/icon.png",
   bin: "kaku",
   dir: "~/.config/kaku",
   config: "~/.config/magpie-agent-kaku/bridge.json",
