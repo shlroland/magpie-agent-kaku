@@ -1,169 +1,173 @@
-# Kaku Assistant 的 Magpie Agent 插件
+# magpie-agent-kaku
 
-把 Kaku Assistant 接到本机 Magpie 网关，并把 Kaku 的 Simple、Deep、可选 Memory 三个角色分别绑到**已经存在**的 Magpie 分组或模型。插件不新建分组、不改路由规则、不转发请求，也不读取真实密钥去调用模型。
+English | [简体中文](./README.zh-CN.md)
 
-这是本地草稿包 `magpie-agent-kaku`（`private: true`）。不要发布到 npm，也不要把它送进上游仓库。
+A [Magpie](https://usemagpie.ai) plugin for [Kaku](https://github.com/tw93/Kaku) Assistant. It does two things:
 
-## 它实际做的两件事
+1. **Points Kaku at the Magpie gateway.** It writes the gateway's `base_url` and API key into Kaku's `~/.config/kaku/assistant.toml`.
+2. **Gives each Kaku role its own Magpie routing group.** Kaku uses different models for different jobs. The plugin binds each role to a group, and Magpie picks the model inside that group.
 
-Magpie 当前的 Agent 写入器只改 JSON、YAML 和 env，**还不能改 TOML**（[插件文档](https://usemagpie.ai/docs/plugins) 的 `format`，以及 Magpie `internal/agent/plugged_test.go` 对 `*.toml` 的拒绝）。Kaku 的助手配置是 TOML，而且有多个模型字段。因此这个包分成两半：
+When you disconnect, your original Kaku config is restored byte for byte.
 
-1. `agent.js` 在 Magpie 自己的 moejs 里运行。它不声明 `model`，Agents 页因此是**连接开关**，没有单个模型选择器（`internal/agent/plugged.go` 在 `model` 为空时把字段做成 provider 开关，并在没有 `model` 的情况下调用 `connect`）。`connect` 只把 `gateway.v1` 和 `gateway.key` 写进插件自己的 `~/.config/magpie-agent-kaku/bridge.json`。
-2. `package.json` 的 `main`（`dist/index.js`）在 Magpie 的 Bun 插件宿主里运行。它监视这份 JSON，再按字段把 Kaku 的 `assistant.toml` 改到对应角色。重复同步如果没有差异，不会再写文件。
+## How routing works
 
-静态绑定和动态路由是两层：
+Routing happens in two layers.
 
-| 层 | 谁做 | 做什么 |
-| --- | --- | --- |
-| 静态角色绑定 | 本插件 | 把 `model`、`chat_model`、可选的 `memory_curator_model` 写成你填的 id |
-| 动态路由 | Magpie 里那个已经存在的分组 | 按分组自己的 fallback、资源策略和 intent 规则，在成员模型之间选择 |
+**Layer 1: the plugin binds Kaku's roles to groups.**
 
-插件不分类请求。网关的异步 hook 也不能改模型（改了会被回滚），所以这里没有用 hook 做分类。
+| Kaku role | Used for | Field in `assistant.toml` | Plugin option |
+| --- | --- | --- | --- |
+| Simple | `#` commands, command fixes, light chat | `model` | `simple` (required) |
+| Deep | `Cmd+L` overlay, `k` chat, tool calls | `chat_model` | `deep` (required) |
+| Memory | Memory curation. Uses Deep if not set | `memory_curator_model` | `memory` (optional) |
 
-## 安装
+**Layer 2: Magpie picks a model inside each group.**
 
-需要已经能运行的 Magpie。开发机另需 Bun 1.1 以上；Magpie 安装插件时会自己准备 Bun。依赖只有 `toml-eslint-parser`，没有 `install` / `postinstall`。`dist/` 已提交，安装时不必再构建。
+A group is a list of member models plus a routing strategy (`smart`, `order`, `cheap`, `fast`, `weight`, and others). For every request, Magpie chooses a member using that strategy, falls back to the next one when a model is out of quota or down, and can apply intent rules ("a multi-step coding task" goes to a strong model, "a quick question" goes to a cheap one). Intent rules look only at the latest user message. During a tool-call round trip, Magpie keeps the turn on the model it already picked.
 
-在本目录：
+The plugin never classifies requests itself. All model choice lives in your Magpie groups, so you change routing with `magpie group` commands, not by editing the plugin.
 
-```sh
-magpie plugin add "$PWD"
-```
+## Requirements
 
-macOS 上如果终端没有 `magpie`：
+- macOS (or Linux) with Magpie running. Magpie brings its own Bun runtime, so you don't need to install Bun.
+- Kaku installed, with `~/.config/kaku/assistant.toml` present.
 
-```sh
-/Applications/magpie.app/Contents/MacOS/magpie plugin add "$PWD"
-```
-
-不要只导入 `agent.js`。没有 `main` 指向的 Bun 模块时，不会有人去改 Kaku 的 TOML。装完后如果改了源码，先 `bun run build`，再在 Magpie 里把插件关一次、开一次。
-
-## 选项
-
-Magpie 把插件选项作为 Bun 入口的第二个参数（`plugins.json` 里该插件的 `options`）。`package.json` 里的 `magpie.options` 只是编辑器的空白起点，**保存之前不会生效**。`simple` 和 `deep` 都为空时，插件拒绝写入。
+On macOS the `magpie` command lives inside the app and is usually not on your `PATH`:
 
 ```sh
-magpie plugin options magpie-agent-kaku '{
-  "simple": "group/kaku-simple",
-  "deep": "group/kaku-deep",
-  "memory": "",
-  "configPath": ""
-}'
+alias magpie=/Applications/Magpie.app/Contents/MacOS/magpie
 ```
 
-| 字段 | 含义 |
-| --- | --- |
-| `simple` | 必填。写入顶层 `model`。填已有的 `group/<id>`，或 `供应商/模型` |
-| `deep` | 必填。写入顶层 `chat_model` |
-| `memory` | 可选。留空则不碰 `memory_curator_model`。填写后才写入；之后再清空，会按恢复规则把这个字段放回去 |
-| `configPath` | 可选。必须指向名为 `assistant.toml` 的文件，支持 `~`。留空时跟 Kaku 一样：有 `XDG_CONFIG_HOME` 就用 `$XDG_CONFIG_HOME/kaku/assistant.toml`，否则 `~/.config/kaku/assistant.toml` |
+The commands below assume this alias.
 
-`kaku-simple` / `kaku-deep` / `kaku-memory` 只是示例名字，Magpie 里没有这些内置分组。id 以 `magpie groups` 显示的为准，选择器里的写法是 `group/<id>`（见 [开始使用](https://usemagpie.ai/docs/start) 和参考文档里的 Routing groups）。不要加 `openai/` 前缀。
+## Usage
 
-保存选项后打开 **Agents → Kaku** 的开关。桥接目录是 `~/.config/magpie-agent-kaku/`，权限 `0700`；`bridge.json` 和 `state.json` 是 `0600`。
+### 1. Install the plugin
 
-## Kaku 会读到什么
+```sh
+git clone https://github.com/shlroland/magpie-agent-kaku.git ~/magpie-agent-kaku
+magpie plugin add ~/magpie-agent-kaku
+```
 
-依据 Kaku `cd238ef` 的 `kaku/src/assistant_config.rs`、`kaku-gui/src/ai_client/assistant_config.rs` 和 `kaku-gui/src/soul.rs`：
+`dist/` is committed, so there is no build step.
 
-- 顶层 `model` 是 Simple（`#` 命令、命令修复、轻量对话）。旧的 `fast_model` 若还在，运行时会盖过 `model`。接入期间插件会删掉 `fast_model`，断开时再按原样放回。
-- `chat_model` 是 Deep（`Cmd+L`、`k`、工具调用）。缺省时会继承 Simple；旧配置若同时有 `model` 和 `fast_model` 且没有 `chat_model`，原来的 `model` 会变成 Deep。插件总是同时写这两个字段，避免角色叠到一起。
-- `memory_curator_model` 可选，缺省时记忆整理用 Deep。
-- `auth_type` 必须是 `api_key`，否则 Kaku 忽略 `base_url` 和 `api_key`，改走 Codex。插件会写成 `api_key`，断开时恢复原值；原来没有这一键就删掉。
-- `base_url` 写成网关的 `v1` 地址（`http://127.0.0.1:<端口>/v1`）。`api_key` 写成这个 Agent 自己的网关 key。
-- `api_mode` 只有 `chat_completions`（默认）和 `responses`。Kaku 分别请求 `{base_url}/chat/completions` 和 `{base_url}/responses`，Magpie 网关这两条都有。插件**不写** `api_mode`。
-- 不改 `enabled`、`web_search_api_key`、`web_search_provider`、`chat_model_choices`、`custom_headers` 以及其他不认识的键。`chat_model_choices` 若已填写，聊天浮层的切换列表仍只含那些项；真正发出的 Deep 请求仍用 `chat_model`。
+### 2. Pick or create groups
 
-Kaku 在打开聊天浮层时，以及每条内联 `#` / 修复任务开始时，读取 `assistant.toml`。已经打开的浮层不会跟着文件变。同步完成后重新打开浮层，或再发一条 `#` 命令。这次没有在 macOS 上跑过 Kaku 图形界面。
-
-## 准备分组
-
-先在 Magpie 里准备好分组，再把 id 填进选项。下面的命令来自当前文档，模型 id 要换成你已经有的：
+List the groups you already have:
 
 ```sh
 magpie groups
-magpie group add "Kaku simple" models=供应商/便宜模型,供应商/备用模型 routing=order
-magpie group add "Kaku deep" models=供应商/强模型,供应商/备用模型 routing=smart
-magpie group rule add kaku-deep use=供应商/强模型 intent="a multi-step coding task" classifier=供应商/小而快的模型
-magpie group rule add kaku-deep use=供应商/便宜模型 intent="a quick question"
-magpie group rule kaku-deep
 ```
 
-`magpie group add "Kaku simple"` 生成的 id 是 `kaku-simple`，写进 Kaku 的值是 `group/kaku-simple`。`routing=` 可以用 `smart`、`order`、`fast`、`cheap`、`weight` 等文档中的策略。intent 只看**最新一条用户文本**，不看更早的对话、系统提示或工具定义；分类失败时这次 intent 不命中，分组仍按自己的顺序回答。工具结果回传期间，Magpie 会让这一轮留在刚选中的模型上。Kaku 自己的工具请求是不是这种形状，这里没有对着真实网关验证过，不能当成已经测过。
+Each line shows the group's id, its strategy, and its members. Inspect one group with `magpie group <id>`.
 
-## 恢复
+To create dedicated groups for Kaku (replace the model ids with ones you have; `magpie models` lists them):
 
-字段级恢复：某个键现在的值和上次写入的值一致，才放回接入前的原值；你后来改过的键会留下，并记为冲突。原来没有的键会被删掉。无效的 TOML 或写到一半的 bridge 会停住，不改 Kaku 的文件。
+```sh
+magpie group add "Kaku simple" models=provider/cheap-model,provider/backup-model routing=order
+magpie group add "Kaku deep"   models=provider/strong-model,provider/backup-model routing=smart
 
-正常断开是关掉 Agents 页上 Kaku 这一行的开关。Magpie 会把 `bridge.json` 里它写过的键恢复；Bun 侧看到 key 消失后做上面的字段恢复。
+# Optional: route by what the user asked
+magpie group rule add kaku-deep use=provider/strong-model intent="a multi-step coding task" classifier=provider/small-fast-model
+magpie group rule add kaku-deep use=provider/cheap-model  intent="a quick question"
+```
 
-只使用命令时，在插件仍启用的情况下：
+A group named `"Kaku simple"` gets the id `kaku-simple`, and you refer to it as `group/kaku-simple`. A plain `provider/model` also works if you don't want routing for a role.
+
+### 3. Set the plugin options
+
+```sh
+magpie plugin options ~/magpie-agent-kaku '{
+  "simple": "group/kaku-simple",
+  "deep":   "group/kaku-deep",
+  "memory": ""
+}'
+```
+
+| Option | Meaning |
+| --- | --- |
+| `simple` | Required. Written to `model`. |
+| `deep` | Required. Written to `chat_model`. |
+| `memory` | Optional. Empty means `memory_curator_model` is left alone. |
+| `configPath` | Optional. Path to a different `assistant.toml`. Defaults to `$XDG_CONFIG_HOME/kaku/assistant.toml` or `~/.config/kaku/assistant.toml`. |
+
+The plugin refuses to write anything if `simple` or `deep` is empty.
+
+### 4. Connect
+
+Turn on the **Kaku** switch on Magpie's Agents page, or run:
+
+```sh
+magpie kaku magpie
+```
+
+Then **reopen** Kaku's `Cmd+L` overlay or send a new `#` command. Kaku reads its config when the overlay opens and when each `#` task starts, so an overlay that is already open keeps the old settings.
+
+After connecting, `assistant.toml` looks like this (comments and other keys are kept):
+
+```toml
+model = "group/kaku-simple"
+chat_model = "group/kaku-deep"
+base_url = "http://127.0.0.1:3425/v1"
+api_key = "<this agent's Magpie gateway key>"
+auth_type = "api_key"
+```
+
+### 5. See which model actually answered
+
+- **Group setup:** `magpie groups` and `magpie group <id>` show members, strategy, and rules.
+- **Each request:** Magpie's usage view (and `GET /v1/magpie/usage/requests` on the gateway) lists every Kaku request with the group it asked for and the model that served it.
+- **Raw check:** a gateway response carries `X-Magpie-Model` and `X-Magpie-Provider` headers.
+
+### 6. Change routing
+
+- To change which models a role can use, edit the group with `magpie group set <id> ...` or add rules. No plugin change is needed and it takes effect on the next request.
+- To point a role at a different group, update the plugin options, then turn the Kaku switch off and on again.
+
+### 7. Disconnect
+
+Turn the Kaku switch off, or run:
 
 ```sh
 magpie kaku default
-bun ./bin/magpie-kaku.mjs status
 ```
 
-`magpie kaku default` 是 Magpie 对插件 Agent 的通用断开命令（文档里的 `magpie <id> default`）。本环境没有安装 Magpie，所以没有实际跑过这条命令。
+Every field the plugin changed goes back to its original value, and keys that didn't exist before are removed. If you edited one of those fields yourself while connected, your edit is kept and reported as a conflict.
 
-也可以直接恢复，并让仍在运行的宿主先不要写回去：
+Always disconnect before removing the plugin. If Magpie was force-quit while connected, re-enable the plugin or run `bun ./bin/magpie-kaku.mjs restore` from the plugin folder.
 
-```sh
-bun ./bin/magpie-kaku.mjs restore
-bun ./bin/magpie-kaku.mjs sync    # 取消暂停并再次接管
-```
+## What the plugin touches
 
-`restore` 在桥还连着时会暂停自动写回，直到 bridge 文件变化或执行 `sync`。状态在 `~/.config/magpie-agent-kaku/state.json`，里面有接入前的 `api_key`，权限 `0600`。恢复完成前不要删它。
+While connected it writes `base_url`, `api_key`, `auth_type`, `model`, `chat_model`, and `memory_curator_model` (only if `memory` is set). It removes the legacy `fast_model` key, which would otherwise override Simple, and puts it back on disconnect.
 
-独立命令不会自动拿到 Magpie 界面里刚保存的选项。它会读 `MAGPIE_KAKU_OPTIONS`，否则读 `~/.config/magpie/plugins.json`（或 `$XDG_CONFIG_HOME/magpie/plugins.json`）里 spec 为 `magpie-agent-kaku` 或以这个目录名结尾的项。
+It never touches `enabled`, `api_mode`, `web_search_provider`, `web_search_api_key`, `chat_model_choices`, `custom_headers`, or any other key.
 
-## 安全与生命周期
+The original values, including your previous `api_key`, are kept in `~/.config/magpie-agent-kaku/state.json` (mode `0600`) until you disconnect. Logs never print key values.
 
-- 网关 key 和原来的 `api_key` 只出现在 `bridge.json`、`assistant.toml` 和 `state.json`。日志和错误只说字段名，不打印这些值。
-- 写文件先写临时文件、`fsync`，再改名。已有的 `assistant.toml` 保持原来的权限；新建的是 `0600`。符号链接会改它指向的文件，不会把链接本身换成普通文件。
-- 监视的是配置文件和 bridge 的父目录，用来接住原子替换。写入是串行的；写之前会再读一次，文件如果已经变了就放弃这一轮。自己刚写出的内容不会再触发一次写入。
-- 插件被关闭或删除时，Magpie 源码会先把 Agent 文件恢复，再重启宿主（`internal/agent/plugged_gone.go`，子系统文档 `agent-wiring.md`）。宿主在标准输入关闭且没有未完成调用时执行 `process.exit(0)`，这时退出处理会再同步一次。宿主若在约 2 秒后被杀掉，退出处理不会运行。因此**不能把卸载或禁用当成必定自动恢复**。强制结束后重新启用插件，或执行 `bun ./bin/magpie-kaku.mjs restore`。
-- 恢复记录对不上当前文件时会停住，避免盖住别人正在写的配置。
+## Troubleshooting
 
-## 开发
+| Symptom | Check |
+| --- | --- |
+| Kaku still uses the old model | Reopen the `Cmd+L` overlay; an open overlay doesn't reload. |
+| Nothing changed in `assistant.toml` | `magpie kaku` should say `provider magpie`, and `simple`/`deep` must both be set. |
+| A group never uses one member | `magpie groups` marks members that can't be served, for example when their provider is turned off. |
+
+## How it works
+
+`agent.js` runs inside Magpie as the agent definition. It has no model field, so the Agents page shows it as a connection switch. When connected it writes the gateway URL and key to `~/.config/magpie-agent-kaku/bridge.json`.
+
+`dist/index.js` runs in Magpie's Bun plugin host. It watches that bridge file and patches only the needed keys in `assistant.toml`, preserving comments and layout. This split exists because Magpie's agent writer can't edit TOML.
+
+## Development
 
 ```sh
 bun install
-bun run typecheck   # tsc --noEmit
-bun test            # 23 项，临时目录，不读本机 Kaku/Magpie 配置
-bun run build       # 重新生成 dist/，安装插件不依赖这一步
-bun ./bin/magpie-kaku.mjs status --home /tmp/kaku-dev
+bun run typecheck
+bun test
+bun run build                                # regenerates dist/
+MAGPIE_BIN=$(which magpie) node scripts/integration-smoke.mjs   # end-to-end test against a mock upstream
 ```
 
-TOML 用 `toml-eslint-parser` 的 range 做定点替换，再用 `Bun.TOML.parse` 校验。没有用整文件 stringify，也没有用正则改 TOML。`@decimalturn/toml-patch` 的 `patch()` 会删掉对象里没提到的键，不适合只改几个字段，所以没有用它。
+## License
 
-删掉的键在恢复时会插回它原来的前一个顶层键后面（`fast_model` 紧跟 `chat_model`）。前一个键已经不在时，才插到第一张表之前。
-
-### 这次已经跑过的检查
-
-在 Bun 1.4.4 上：`tsc --noEmit` 通过，`bun run build` 通过，`bun test` 通过，`bun pm pack --dry-run` 含 `dist/index.js` 和 `agent.js`，且没有 install 脚本。单元测试覆盖注释保留、顶层键和表、引号键与点号键、可选 Memory、重复同步不写文件、非法 TOML / 半截 bridge、手工修改冲突、完整和部分恢复、写前再读、符号链接、恢复日志对不上时停住、目录监视，以及假宿主从 `connect()` 的 JSON 同步到断开恢复。
-
-对照过的上游源码：Kaku `cd238ef`，Magpie `eef99e4`，社区插件示例 `ecab839`。文档页面抓取于 2026-11-08。
-
-## Linux 上的真实 Magpie 集成
-
-官方安装（终端构建，校验和由 usemagpie.ai 提供）：
-
-```sh
-curl -fsSL https://usemagpie.ai/install.sh | sh -s -- --tui
-MAGPIE_BIN="$HOME/.local/bin/magpie" node scripts/integration-smoke.mjs
-```
-
-已在这台 Linux x86_64 虚拟机上跑通，Magpie **0.1.3304**（`magpie-cli-linux-amd64`）。脚本使用临时 `HOME`，不读本机已有的 Magpie 或 Kaku 配置。
-
-| 组件 | 这次是什么 |
-| --- | --- |
-| Magpie CLI / `magpie serve` | 官方 0.1.3304 终端构建，真实进程 |
-| 插件安装、选项、`magpie kaku` 开关、`magpie kaku default`、`magpie plugin off` | 真实 Magpie 命令 |
-| 分组 `group/kaku-simple`、`group/kaku-deep`、`group/kaku-memory` | 真实 `magpie group add`，成员是本地供应商的模型 |
-| 上游模型 | `scripts/mock-openai.mjs`，只听 `127.0.0.1`，固定回复，不花额度 |
-| Kaku 程序和 macOS 图形界面 | **没有跑**。配置文件是夹具 `scripts/fixtures/assistant.toml`；PATH 上有一个假的 `kaku`，只为了让 Magpie 认为它已安装 |
-
-脚本检查：Agents 行是 `provider` 开关而不是模型选择器；三个角色和 `base_url` / `api_key` / `auth_type` 写进 TOML 且注释还在；`fast_model` 在接入时消失、断开后回到原位；网关 `/v1/models` 列出三个分组；流式补全、工具调用和工具结果回传都打到对应成员，Deep 的两跳都停在 `deep-a`；`magpie kaku default` 和 `magpie plugin off` 都把夹具文件恢复成接入前的字节。
-
-还没做、也不能用这次结果代替的部分：macOS 上的 Kaku.app、真实 `assistant.toml` 热加载、`#` 命令和 `Cmd+L` 对话、以及用户自己的供应商账号。用户的 Mac 当时不在线。
+MIT
