@@ -185,3 +185,7 @@ MAGPIE_BIN=$(which magpie) node scripts/integration-smoke.mjs   # 用假上游�
 MIT
 
 Kaku 图标来自 [tw93/Kaku](https://github.com/tw93/Kaku)（MIT 许可）。
+
+## 发布
+
+发布是自动的。在 PR 里把 `package.json` 的 `version` 改高，合并进 `main` 后，[Publish 工作流](.github/workflows/publish.yml) 会跑检查、通过 npm Trusted Publishing 发布到 npm，并创建 GitHub release `v<版本号>`。版本号没变的推送不会发布。

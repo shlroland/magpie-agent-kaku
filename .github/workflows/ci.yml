@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - name: dist is committed and up to date
+        run: git diff --exit-code -- dist || (echo "::error::dist/ is out of date. Run 'bun run build' and commit dist/." && exit 1)

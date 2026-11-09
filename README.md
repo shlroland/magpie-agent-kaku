@@ -185,3 +185,7 @@ MAGPIE_BIN=$(which magpie) node scripts/integration-smoke.mjs   # end-to-end tes
 MIT
 
 The Kaku logo is from [tw93/Kaku](https://github.com/tw93/Kaku) (MIT).
+
+## Releasing
+
+Releases are automatic. Bump `version` in `package.json` in a pull request; when it's merged into `main`, the [Publish workflow](.github/workflows/publish.yml) runs the checks, publishes to npm through npm Trusted Publishing, and creates a GitHub release `v<version>`. A push that doesn't change the version publishes nothing.

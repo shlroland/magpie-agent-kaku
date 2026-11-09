@@ -1,0 +1,66 @@
+name: Publish
+
+# Publishes to npm when a push to main (usually a merged PR) carries a
+# version in package.json that npm doesn't have yet. Uses npm Trusted
+# Publishing (OIDC), so no npm token is stored in the repo.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Is this version new?
+        id: version
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already on npm, nothing to publish."
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.version.outputs.new == 'true'
+        run: bun install --frozen-lockfile
+
+      - if: steps.version.outputs.new == 'true'
+        run: bun run check
+
+      - if: steps.version.outputs.new == 'true'
+        name: dist is committed and up to date
+        run: git diff --exit-code -- dist
+
+      - if: steps.version.outputs.new == 'true'
+        run: npm install -g npm@latest
+
+      - if: steps.version.outputs.new == 'true'
+        run: npm publish --access public
+
+      - if: steps.version.outputs.new == 'true'
+        name: Tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
