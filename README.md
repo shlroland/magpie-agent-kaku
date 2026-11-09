@@ -1,3 +1,5 @@
+<p align="center"><img src="./assets/icon.png" width="128" alt="Kaku"></p>
+
 # magpie-agent-kaku
 
 English | [简体中文](./README.zh-CN.md)
@@ -181,3 +183,5 @@ MAGPIE_BIN=$(which magpie) node scripts/integration-smoke.mjs   # end-to-end tes
 ## License
 
 MIT
+
+The Kaku logo is from [tw93/Kaku](https://github.com/tw93/Kaku) (MIT).

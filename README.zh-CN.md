@@ -1,3 +1,5 @@
+<p align="center"><img src="./assets/icon.png" width="128" alt="Kaku"></p>
+
 # magpie-agent-kaku
 
 [English](./README.md) | 简体中文
@@ -181,3 +183,5 @@ MAGPIE_BIN=$(which magpie) node scripts/integration-smoke.mjs   # 用假上游�
 ## 许可
 
 MIT
+
+Kaku 图标来自 [tw93/Kaku](https://github.com/tw93/Kaku)（MIT 许可）。

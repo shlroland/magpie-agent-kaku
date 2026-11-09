@@ -1,6 +1,6 @@
 {
   "name": "magpie-agent-kaku",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Magpie Agent plugin that points Kaku Assistant at the local Magpie gateway and binds its model roles to existing groups.",
   "repository": {
     "type": "git",
@@ -22,7 +22,8 @@
     "README.md",
     "LICENSE",
     "README.zh-CN.md",
-    "INSTALL_FOR_AGENTS.md"
+    "INSTALL_FOR_AGENTS.md",
+    "assets/icon.png"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -48,7 +49,7 @@
   "license": "MIT",
   "magpie": {
     "name": "Kaku",
-    "icon": "https://raw.githubusercontent.com/tw93/Kaku/main/assets/logo.png",
+    "icon": "https://raw.githubusercontent.com/shlroland/magpie-agent-kaku/main/assets/icon.png",
     "agent": "./agent.js",
     "summary": {
       "en": "Point Kaku Assistant at Magpie and bind Simple, Deep, and optional Memory to existing groups",
