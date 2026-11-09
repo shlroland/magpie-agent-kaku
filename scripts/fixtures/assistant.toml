@@ -1,0 +1,11 @@
+# Kaku Assistant configuration
+enabled = true
+api_key = "user-key" # mine
+model = "gpt-mini"
+chat_model = "gpt-deep"
+fast_model = "legacy-mini"
+auth_type = "codex"
+web_search_api_key = "search-secret"
+
+[provider]
+name = "custom" # table

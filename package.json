@@ -1,0 +1,54 @@
+{
+  "name": "magpie-agent-kaku",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Magpie Agent plugin that points Kaku Assistant at the local Magpie gateway and binds its model roles to existing groups.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "magpie-kaku": "./bin/magpie-kaku.mjs"
+  },
+  "files": [
+    "dist",
+    "agent.js",
+    "bin/magpie-kaku.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "check": "bun run typecheck && bun test && bun run build"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "dependencies": {
+    "toml-eslint-parser": "1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  },
+  "keywords": [
+    "magpie-plugin",
+    "magpie-agent",
+    "kaku"
+  ],
+  "license": "MIT",
+  "magpie": {
+    "name": "Kaku",
+    "agent": "./agent.js",
+    "summary": {
+      "en": "Point Kaku Assistant at Magpie and bind Simple, Deep, and optional Memory to existing groups",
+      "zh": "把 Kaku Assistant 接到 Magpie，并把 Simple、Deep 和可选 Memory 绑到已有分组"
+    },
+    "options": {
+      "simple": "",
+      "deep": "",
+      "memory": "",
+      "configPath": ""
+    }
+  }
+}
