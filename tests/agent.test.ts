@@ -27,6 +27,7 @@ describe("package and fake host", () => {
       main: string
       scripts: Record<string, string>
       magpie: { agent: string }
+      private?: boolean
     }
     expect(manifest.private).not.toBe(true)
     expect(manifest.main).toBe("./dist/index.js")
