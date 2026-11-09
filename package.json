@@ -13,7 +13,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "magpie-kaku": "./bin/magpie-kaku.mjs"
+    "magpie-kaku": "bin/magpie-kaku.mjs"
   },
   "files": [
     "dist",
