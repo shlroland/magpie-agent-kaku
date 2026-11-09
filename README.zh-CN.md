@@ -27,6 +27,16 @@
 
 插件自己从不判断请求该给谁。选模型的逻辑全在 Magpie 的组里，所以要改路由，用 `magpie group` 命令就行，不用动插件。
 
+## 让 AI agent 帮你安装
+
+把下面这段 Prompt 贴给你电脑上的 Grok Build、Codex、Claude Code 或其他编码 agent：
+
+```text
+在这台电脑上为 Magpie 安装 Kaku 插件。阅读 https://raw.githubusercontent.com/shlroland/magpie-agent-kaku/main/INSTALL_FOR_AGENTS.md 并按步骤执行。创建路由组之前，先问我 Kaku 的 Simple 和 Deep 角色想用哪些模型；不要输出任何 API key。
+```
+
+agent 会先备份你的 Kaku 配置，安装插件，和你一起配好路由组，接入 Kaku，再确认实际是哪个模型在回答。想手动安装，按下面的步骤来。
+
 ## 环境要求
 
 - macOS 或 Linux，Magpie 在运行。Magpie 自带 Bun，不用另装。

@@ -27,6 +27,16 @@ A group is a list of member models plus a routing strategy (`smart`, `order`, `c
 
 The plugin never classifies requests itself. All model choice lives in your Magpie groups, so you change routing with `magpie group` commands, not by editing the plugin.
 
+## Install with an AI agent
+
+Paste this prompt into Grok Build, Codex, Claude Code, or any coding agent running on your computer:
+
+```text
+Install the Kaku plugin for Magpie on this computer. Read https://raw.githubusercontent.com/shlroland/magpie-agent-kaku/main/INSTALL_FOR_AGENTS.md and follow every step. Ask me which models I want for Kaku's Simple and Deep roles before creating the groups, and never print any API key.
+```
+
+The agent backs up your Kaku config, installs the plugin, sets up the routing groups with you, connects Kaku, and checks which model answers. To do it by hand, follow the steps below.
+
 ## Requirements
 
 - macOS (or Linux) with Magpie running. Magpie brings its own Bun runtime, so you don't need to install Bun.
